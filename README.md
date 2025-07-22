@@ -8,7 +8,7 @@
 nasm -o ./dist/mbr.bin mbr.S
 ```
 
-* Creating **hd60M.img**
+* Creating **hd60M.img** if not exist
 
 ```sh
 dd if=/dev/zero of=./dist/hd60M.img bs=1M count=60

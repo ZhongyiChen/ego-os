@@ -7,6 +7,8 @@ SECTION MBR vstart=0x7c00
     mov ss,ax 
     mov fs,ax 
     mov sp,0x7c00 
+    mov ax,0xb800
+    mov gs,ax
 
 ; 清屏利用 0x06 号功能,上卷全部行,则可清屏  
 ; ----------------------------------------------------------- 
@@ -27,33 +29,23 @@ SECTION MBR vstart=0x7c00
                             ; 下标从 0 开始,所以 0x18=24,0x4f=79 
     int     0x10            ; int 0x10 
 
-;;;;;;;;;    下面这三行代码获取光标位置    ;;;;;;;;; 
-; .get_cursor 获取当前光标位置,在光标位置处打印字符  
-    mov ah, 3          ; 输入: 3 号子功能是获取光标位置,需要存入 ah 寄存器 
-    mov bh, 0               ; bh 寄存器存储的是待获取光标的页号 
+    ; 输出背景色绿色，前景色红色，并且跳动的字符串"1 MBR"
+    mov byte [gs:0x00],'1' 
+    mov byte [gs:0x01],0xA4   ; A 表示绿色背景闪烁，4表示前景色为红色 
 
-    int 0x10                ; 输出: ch=光标开始行,cl=光标结束行 
-                            ; dh=光标所在行号,dl=光标所在列号 
+    mov byte [gs:0x02],' ' 
+    mov byte [gs:0x03],0xA4 
 
-;;;;;;;;;    获取光标位置结束    ;;;;;;;;;;;;;;;; 
+    mov byte [gs:0x04],'M' 
+    mov byte [gs:0x05],0xA4 
 
-;;;;;;;;;     打印字符串    ;;;;;;;;;;; 
-    ; 还是用 10h 中断,不过这次调用 13 号子功能打印字符串 
-    mov ax, message 
-    mov bp, ax              ; es:bp 为串首地址,es 此时同 cs 一致, 
-                            ; 开头时已经为 sreg 初始化 
+    mov byte [gs:0x06],'B' 
+    mov byte [gs:0x07],0xA4 
 
-    ; 光标位置要用到 dx 寄存器中内容,cx 中的光标位置可忽略 
-    mov cx, 5               ; cx 为串长度,不包括结束符 0 的字符个数 
-    mov ax, 0x1301       	; 子功能号 13 显示字符及属性,要存入 ah 寄存器, 
-							; al 设置写字符方式 ah=01: 显示字符串,光标跟随移动 
-    mov bx, 0x2             ; bh 存储要显示的页号,此处是第 0 页, 
-                            ; bl 中是字符属性,属性黑底绿字(bl = 02h) 
-    int 0x10                ; 执行 BIOS 0x10 号中断 
-;;;;;;;;;      打字字符串结束    ;;;;;;;;;;;;;;; 
+    mov byte [gs:0x08],'R' 
+    mov byte [gs:0x09],0xA4
 
     jmp $                    ; 使程序悬停在此 
 
-    message db "1 MBR" 
     times 510-($-$$) db 0 
     db 0x55,0xaa
