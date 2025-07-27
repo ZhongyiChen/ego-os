@@ -35,7 +35,7 @@ nasm -I include/ -o ./dist/loader.bin loader.S
 * Writing **loader.bin** on **hd60M.img**
 
 ```sh
-dd if=./dist/loader.bin of=./dist/hd60M.img bs=512 count=1 seek=2 conv=notrunc
+dd if=./dist/loader.bin of=./dist/hd60M.img bs=512 count=4 seek=2 conv=notrunc
 ```
 
 

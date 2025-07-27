@@ -48,7 +48,7 @@ SECTION MBR vstart=MBR_BASE_ADDR
 
     mov eax,LOADER_START_SECTOR     ; 起始扇区 lba 地址
     mov bx,LOADER_BASE_ADDR         ; 写入的地址(0x900)
-    mov cx,1                        ; 待读入的扇区数量
+    mov cx,4                        ; 待读入的扇区数量
     call rd_disk_m_16               ; 调用磁盘读取函数
 
     jmp LOADER_BASE_ADDR            ; 跳转到 Loader 继续运行
