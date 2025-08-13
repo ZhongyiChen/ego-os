@@ -29,6 +29,11 @@ section loader vstart=LOADER_BASE_ADDR
 	SELECTOR_DATA 		equ (0x0002<<3) + TI_GDT + RPL0		; 对应 GDT 的 DATA_STACK_DESC
 	SELECTOR_VIDEO 		equ (0x0003<<3) + TI_GDT + RPL0		; 对应 GDT 的 VIDEO_DESC
 
+	; total_mem_bytes 用于保存内存容量，以字节为单位，此位置比较好记
+	; 当前偏移 loader.bin 文件头 0x200 字节，而 loader.bin 的加载地址是 0x900
+	; 所有 total_mem_bytes 在内存中的地址是 0xb00 (在内核中会引用此地址)
+	total_mem_bytes 	dd 0
+
 	gdt_ptr  			dw  GDT_LIMIT
 						dd  GDT_BASE
 	loadermsg 			db '2 loader in real.'
@@ -74,7 +79,7 @@ loader_start:
 
 ;--------------------    cr0 第 0 位置 1  -------------------------------
 	mov eax,cr0
-	or eax,0x00000001										; PE(Protection Enable) 位置 1
+	or eax,0x00000001										; PE(Protection Enable) 位，置 1
 	mov cr0,eax
 
 
