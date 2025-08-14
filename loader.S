@@ -3,8 +3,6 @@ section loader vstart=LOADER_BASE_ADDR
 
 	LOADER_STACK_TOP equ LOADER_BASE_ADDR
 
-	jmp loader_start
-
 ;------------------ 1dq = 2dd = 4dw = 8db -------------------
 
 	GDT_BASE:  			dd 0x00000000
@@ -36,9 +34,83 @@ section loader vstart=LOADER_BASE_ADDR
 
 	gdt_ptr  			dw  GDT_LIMIT
 						dd  GDT_BASE
-	loadermsg 			db '2 loader in real.'
+
+	; ARDS(结构体本身是 20 字节大小，这里使用 228 是为了使 loader_start 对齐 256 字节)
+	ards_buf times 228	db 0
+	ards_n				dw 0
+
+	ch_table			db '0123456789abcdef'
 
 loader_start:
+
+;-----------------------------------------------------------------------
+; INT 0x15    功能号: 0xE820 | 0xE801 | 0x88       功能描述:获取内存大小
+;-----------------------------------------------------------------------
+	xor ebx,ebx												; 第一次调用时必须把 EBX 置 0
+	mov edx,0x534d4150										; 'SMAP' 的 ASCII 码
+	mov di,ards_buf											; [ES:DI] 指向 ARDS 结构缓冲区
+	
+	.e820_mem_get_loop:
+		mov eax,0x0000e820									; 设置子功能号 AX = 0xE820
+		mov ecx,20											; ARDS 结构体大小，默认是 20 字节
+		int 0x15
+		jc .e820_failed_so_try_e801   						; 若 CF 位为 1 则有错误发生，尝试 0xE801 子功能
+		add di,cx											; 当前内存块信息已获取成功，指向下一个 ARDS 结构体位置
+		inc word [ards_n]									; ARDS 结构体总数量 + 1
+		cmp ebx,0											; 判断是否已经全部读取：若 EBX 为 0 且 CF 不为 1，说明 ARDS 信息已全部返回
+		jnz .e820_mem_get_loop
+
+		mov cx,[ards_n]										; 准备遍历每一个 ARDS 结构体，找出 base_add_low + length_low 的最大值，即内存容量
+		mov ebx,ards_buf
+		xor edx,edx											; EDX 用于表示最大的内存容量
+	
+	.find_max_mem_area:
+		mov eax,[ebx]										; [EBX] = base_add_low
+		add eax,[ebx + 8]									; [EBX + 8] = length_low
+		add ebx,20											; 指向下一个 ARDS 结构体
+		cmp edx,eax											; 找出最大值，然后放置于 EDX 中
+		jge .next_ards
+		mov edx,eax
+	.next_ards:
+		loop .find_max_mem_area
+		jmp .mem_get_ok
+
+	.e820_failed_so_try_e801:
+		mov ax,0xe801										; 设置子功能号 AX = 0xE801
+		int 0x15
+		jc .e801_failed_so_try88							; 当前 0xE801 方法失败，最后尝试 0x88 方法
+
+		mov cx,0x400										; 0x400 = 1KB
+		mul cx												; DX:AX = AX * CX
+		shl edx,16											; DX 移至 EDX 高 16 位，DX 清零
+		and eax,0x0000FFFF									; EAX 高 16 位清零
+		or edx,eax											; EDX 表示着低 15MB 的内存大小
+		add edx,0x100000									; 加上无法获取的那 1MB
+		mov esi,edx											; 把此低 15MB 的内存大小放置于 ESI 中，以作备份
+
+		xor eax,eax											; EAX 高位清零。准备统计 16MB 以上的内存，此时 16MB 以上的总内存大小 = BX(或 DX) * 64KB
+		mov ax,bx
+		mov ecx,0x10000										; 0x10000 = 64KB
+		mul ecx												; EDX:EAX = EAX * ECX
+		add esi,eax											; 当前只为检测 4GB 以内的内存，因此直接忽略 EDX
+		mov edx,esi											; EDX 就是最终的总内存大小
+		jmp .mem_get_ok
+
+	.e801_failed_so_try88:
+		mov ah,0x88											; 设置子功能号 AH = 0x88
+		int 0x15
+		jc .error_hlt
+		add eax,0x0000ffff									; 总容量 = AX * 1KB，EAX 高 16 位直接清零
+
+		mov cx,0x400										; 0x400 = 1KB
+		mul cx												; DX:AX = AX * CX
+		shl edx,16											; DX 移至 EDX 高 16 位，DX 清零
+		or edx,eax											; EDX 表示着结果内存的大小
+		add edx,0x100000									; 0x88 子功能也只会返回 1MB 以上的内存，因此实际内存必须加上该尺寸
+
+	.mem_get_ok:
+		mov [total_mem_bytes],edx							; 最终将内存大小存放于 total_mem_bytes
+
 ;------------------------------------------------------------ 
 ; INT 0x10    功能号:0x13    功能描述:打印字符串
 ;------------------------------------------------------------ 
@@ -56,8 +128,8 @@ loader_start:
 ;  		 3 —— 字符串中含显示字符和显示属性。显示后，光标位置改变
 ; 无返回值
     mov sp,LOADER_BASE_ADDR 
-    mov bp,loadermsg    									; ES:BP = 字符串地址 
-    mov cx,17            									; CX = 字符串长度 
+    mov bp,ch_table    										; ES:BP = 字符串地址 
+    mov cx,16            									; CX = 字符串长度 
     mov ax,0x1301        									; AH = 13,  AL = 01h 
     mov bx,0x001f         									; 页号为 0(BH = 0) 蓝底粉红字(BL = 1fh) 
     mov dx,0x1800           								; 行数 dh 为 0x18，列数 dl 为 0x00。0x18 的十进制为 24，即最后一行行首
@@ -85,6 +157,10 @@ loader_start:
 
 ;--------------------     强制刷新流水线   -------------------------------
 	jmp dword SELECTOR_CODE:p_mode_start
+
+;--------------------     出现错误即挂起   -------------------------------
+.error_hlt:
+	hlt
 
 [bits 32]
 

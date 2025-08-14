@@ -51,7 +51,7 @@ SECTION MBR vstart=MBR_BASE_ADDR
     mov cx,4                        ; 待读入的扇区数量
     call rd_disk_m_16               ; 调用磁盘读取函数
 
-    jmp LOADER_BASE_ADDR            ; 跳转到 Loader 继续运行
+    jmp LOADER_BASE_ADDR + 0x300    ; 跳转到 Loader 的 loader_start 继续运行
 
 ; 功能: 读取硬盘 n 个扇区 （在 16 位模式下读硬盘）
 ;-----------------------------------------------------------

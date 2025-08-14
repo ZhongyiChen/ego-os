@@ -11,31 +11,32 @@ dd if=/dev/zero of=./dist/hd60M.img bs=1M count=60
 
 ## MBR
 
-* Compiling **mbr.S** into **mbr.bin**
+* Preparing sh script
 
 ```sh
-nasm -I include/ -o ./dist/mbr.bin mbr.S
+chmod 755 gen-mbr.sh
 ```
 
-* Writing **mbr.bin** on **hd60M.img**
+* Excuting
 
 ```sh
-dd if=./dist/mbr.bin of=./dist/hd60M.img bs=512 count=1 conv=notrunc
+./gen-mbr.sh
 ```
 
 
 ## LOADER
 
-* Compiling **loader.S** into **loader.bin**
+* Preparing sh scripts
 
 ```sh
-nasm -I include/ -o ./dist/loader.bin loader.S
+chmod 755 gen-mbr.sh
+chmod 755 gen-loader.sh
 ```
 
-* Writing **loader.bin** on **hd60M.img**
+* Excuting
 
 ```sh
-dd if=./dist/loader.bin of=./dist/hd60M.img bs=512 count=4 seek=2 conv=notrunc
+./gen-loader.sh
 ```
 
 
