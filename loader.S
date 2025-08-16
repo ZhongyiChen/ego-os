@@ -132,7 +132,7 @@ loader_start:
     mov cx,16            									; CX = 字符串长度 
     mov ax,0x1301        									; AH = 13,  AL = 01h 
     mov bx,0x001f         									; 页号为 0(BH = 0) 蓝底粉红字(BL = 1fh) 
-    mov dx,0x1800           								; 行数 dh 为 0x18，列数 dl 为 0x00。0x18 的十进制为 24，即最后一行行首
+    mov dx,0x1800           								; 行数 DH 为 0x18，列数 DL 为 0x00。0x18 的十进制为 24，即最后一行行首
     int 0x10                 								; 最后一次调用 10h 号中断
 
 ;--------------------   准备进入保护模式   ------------------------------- 
@@ -173,7 +173,73 @@ p_mode_start:
 	mov ax,SELECTOR_VIDEO
 	mov gs,ax
 
-	mov byte [gs:160],'P'									; 默认的文本显示模式是 80*25，即每行是 80 个字符（0～79），每个字符占 2 字节
+	call setup_page											; 创建页目录及页表，并初始化页内存位图
+
+	sgdt [gdt_ptr]											; 将 GDT 的位置先保存起来
+
+	mov ebx,[gdt_ptr + 2]									; 将 GDT_BASE 放置于 EBX 中
+	or dword [ebx + 0x18 + 4],0xc0000000					; 视频段是第 3 个段描述符,每个描述符是 8 字节,故这里加上 0x18；加 4 则表示指向段描述符的高 4 字节
+															; 0xc0000000 是内存 3GB 起始处。下同
+	
+	add dword [gdt_ptr + 2],0xc0000000						; 使 GDT_BASE 加上 3GB，以符合内核位置要求
+	add esp,0xc0000000										; 栈指针亦映射到内核地址
+
+	mov eax,PAGE_DIR_TABLE_POS
+	mov cr3,eax												; 把页目录地址赋给 CR3
+
+	mov eax,cr0
+	or eax,0x80000000										; 打开 CR0 的 PG 位（第 31 位）
+	mov cr0,eax												; 分页已开启
+
+	lgdt [gdt_ptr]											; 用新的地址加载 GDT
+
+	mov byte [gs:160],'V'									; 默认的文本显示模式是 80*25，即每行是 80 个字符（0～79），每个字符占 2 字节
 															; 所以这里的意思是在第 1 行(0 为首行)行首处显示后面的文本字符
 
 	jmp $
+
+;------------------------------------------------------------ 
+; 创建页目录以及页表
+;------------------------------------------------------------ 
+setup_page:
+		mov ecx,4096										; 标准页是 4KB，即 4096B
+		mov esi,0
+	.clear_page_dir:
+		mov byte [PAGE_DIR_TABLE_POS + esi],0				; 将页目录所占空间逐字节清零
+		inc esi
+		loop .clear_page_dir
+
+	.create_pde:
+		mov eax,PAGE_DIR_TABLE_POS							; EAX 指向页目录首地址
+		add eax,0x1000										; 0x1000 = 4K，这里加上 4KB 表示指向第一个页表的位置
+		mov ebx,eax											; 将第一个页表的地址放置于 EBX 基址寄存器中，为创建 PTE 做准备
+		or eax,PG_US_U | PG_RW_W | PG_P						; 设置第一个页表的属性：US(1)，RW(1)，P(1)
+		mov [PAGE_DIR_TABLE_POS + 0x0],eax					; 把第一个页表地址写入到页目录项 0 中
+		mov [PAGE_DIR_TABLE_POS + 0xc00],eax				; 把第一个页表地址写入到页目录项 768(即 0xc00) 中，0xc00 以上的目录项用于内核空间
+															; 也就是页表的 0xc0000000 ～ 0xffffffff 共计 1G 属于内核，0x0 ～ 0xbfffffff 共计 3G 属于用户进程
+		sub eax,0x1000										; EAX 指向页目录
+		mov [PAGE_DIR_TABLE_POS + 4092],eax					; 使最后一个目录项指向页目录表自己的地址，目的是为了将来能够动态操作页表
+
+		mov ecx,256											; 4KB * 256 = 1MB，这里要遍历 1MB 低端内存
+		mov esi,0
+		mov edx,PG_US_U | PG_RW_W | PG_P					; 设置 PTE 页表的属性：US(1)，RW(1)，P(1)。高位(地址位)先置了 0，表示第 0 页
+	.create_pte:
+		mov [ebx + esi * 4],edx								; 此时 EBX 已指向第一个页表的地址
+		add edx,4096										; EDX 指向下一个页表地址
+		inc esi
+		loop .create_pte
+
+		mov eax,PAGE_DIR_TABLE_POS							; EAX 指向页目录首地址
+		add eax,0x2000										; 0x1000 = 8K，这里加上 8KB 表示指向第二个页表的位置
+		or eax,PG_US_U | PG_RW_W | PG_P						; 设置第二个页表的属性：US(1)，RW(1)，P(1)
+		mov ebx,PAGE_DIR_TABLE_POS							; EBX 指向页目录首地址
+		mov ecx,254											; 遍历范围为第 769 ～ 1022 共 254 个目录项（第 1023 项被用来指向页目录自身了）
+															; 第 255 个 PDE 已经指向了页目录表本身
+		mov esi,769
+	.create_kernel_pde:
+		mov [ebx + esi * 4],eax								; 将第 2+ 个页表地址放置于页目录的第 769+ 项
+		inc esi												; ESI 指向下一个页目录项
+		add eax,0x1000										; EAX 指向下一个物理页
+		loop .create_kernel_pde
+
+	ret

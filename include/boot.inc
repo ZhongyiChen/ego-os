@@ -91,3 +91,17 @@ RPL3                equ   11b
 ;						TI 为 1 表示 LDT 索引描述符
 TI_GDT              equ 0_00b
 TI_LDT              equ 1_00b
+
+
+; --------------------------------------------------
+;                      PAGE
+; --------------------------------------------------
+
+; 二级页目录表，放在内存中 1MB 起始位置，所有页表连续存放
+PAGE_DIR_TABLE_POS  equ 0x100000
+
+PG_P                equ     1b
+PG_RW_R             equ   0_0b
+PG_RW_W             equ   1_0b
+PG_US_S             equ 0_0_0b
+PG_US_U             equ 1_0_0b
