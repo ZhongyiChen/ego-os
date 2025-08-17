@@ -5,7 +5,7 @@ if [ ! -e "./dist/hd60M.img" ]; then
 fi
 
 # Compiling mbr.S into mbr.bin
-nasm -I include/ -o ./dist/mbr.bin mbr.S
+nasm -I include/ -o ./dist/mbr.bin ./boot/mbr.S
 
 # Writing mbr.bin on hd60M.img
 dd if=./dist/mbr.bin of=./dist/hd60M.img bs=512 count=1 conv=notrunc

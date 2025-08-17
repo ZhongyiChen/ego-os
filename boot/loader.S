@@ -1,7 +1,5 @@
-%include "include/boot.inc"
+%include "../include/boot.inc"
 section loader vstart=LOADER_BASE_ADDR
-
-	LOADER_STACK_TOP equ LOADER_BASE_ADDR
 
 ;------------------ 1dq = 2dd = 4dw = 8db -------------------
 
@@ -32,6 +30,7 @@ section loader vstart=LOADER_BASE_ADDR
 	; 所有 total_mem_bytes 在内存中的地址是 0xb00 (在内核中会引用此地址)
 	total_mem_bytes 	dd 0
 
+	; GDT 指针，前 2 字节是 GDT 界限，后 4 字节是 GDT 起始地址
 	gdt_ptr  			dw  GDT_LIMIT
 						dd  GDT_BASE
 
@@ -173,6 +172,11 @@ p_mode_start:
 	mov ax,SELECTOR_VIDEO
 	mov gs,ax
 
+	mov eax,KERNEL_START_SECTOR								; EAX 指向 kernel.bin 所在的磁盘扇区号
+	mov ebx,KERNEL_BIN_BASE_ADDR							; EBX 指向 kernel.bin 将被搬至的内存起始地址
+	mov ecx,200												; ECX 指定需要读取的扇区数（与 dd 命令的 count 参数值一致）
+	call rd_disk_m_32										; 调用（32 位模式下）读取磁盘的函数
+
 	call setup_page											; 创建页目录及页表，并初始化页内存位图
 
 	sgdt [gdt_ptr]											; 将 GDT 的位置先保存起来
@@ -193,10 +197,91 @@ p_mode_start:
 
 	lgdt [gdt_ptr]											; 用新的地址加载 GDT
 
-	mov byte [gs:160],'V'									; 默认的文本显示模式是 80*25，即每行是 80 个字符（0～79），每个字符占 2 字节
+	mov byte [gs:160],'L'									; 默认的文本显示模式是 80*25，即每行是 80 个字符（0～79），每个字符占 2 字节
 															; 所以这里的意思是在第 1 行(0 为首行)行首处显示后面的文本字符
 
-	jmp $
+	jmp SELECTOR_CODE:enter_kernel	  						; 再次强制刷新流水线，以更新 GDT
+
+
+;------------------------------------------------------------ 
+; 进入内核，即运行 kernel.bin
+;------------------------------------------------------------ 
+enter_kernel:
+	mov byte [gs:320], 'k'									; 视频段段基址已经被更新（下同）
+	mov byte [gs:322], 'e'
+	mov byte [gs:324], 'r'
+	mov byte [gs:326], 'n'
+	mov byte [gs:328], 'e'
+	mov byte [gs:330], 'l'
+
+	call kernel_init
+
+	mov esp, 0xc009f000
+
+	jmp KERNEL_ENTRY_POINT
+
+
+;------------------------------------------------------------ 
+; 将 kernel.bin 中的各个 segment 拷贝到待执行的虚拟地址
+;------------------------------------------------------------ 
+kernel_init:
+	xor eax,eax
+	xor ebx,ebx												; EBX 用于记录程序头表地址
+	xor ecx,ecx												; CX 用于记录程序头表中的 Program Header 数量
+	xor edx,edx												; DX 用于记录 Program Header 的尺寸，即 e_phentsize
+
+	mov dx,[KERNEL_BIN_BASE_ADDR + 42]						; kernel.bin 偏移 42 字节处是 e_phentsize
+	mov ebx,[KERNEL_BIN_BASE_ADDR + 28]						; kernel.bin 偏移 28 字节处是 e_phoff
+	add ebx,KERNEL_BIN_BASE_ADDR							; EBX 指向 Program Header 的物理地址
+	mov cx,[KERNEL_BIN_BASE_ADDR + 44]						; kernel.bin 偏移 44 字节处是 e_phnum
+
+	.each_segment:
+		cmp byte [ebx + 0],PT_NULL							; 若 p_type == PT_NULL，说明此 Program Header 未使用
+		je .PTNULL
+
+		; 为函数 mem_cpy 压入参数，顺序为从右往左。函数原型类似于 mem_cpy(dst, src, size)
+		push dword [ebx + 16]								; Program Header 中偏移 16 字节处是 p_filesz
+															; 参数 size
+		mov eax,[ebx + 4]									; Program Header 中偏移 4 字节处是 p_offset
+		add eax,KERNEL_BIN_BASE_ADDR						; 加上 kernel.bin 被加载到的物理内存地址，得到该段的物理内存地址
+		push eax											; 参数 src
+		push dword [ebx + 8]								; Program Header 中偏移 8 字节处是 p_vaddr
+															; 参数 dst
+		call mem_cpy										; 调用 mem_cpy 完成段复制
+		add esp,12											; 清理栈中所压入的 3 个参数
+
+	.PTNULL:
+		add ebx,edx											; EBX 指向下一个 Program Header
+		loop .each_segment
+
+	ret
+
+
+;------------------------------------------------------------ 
+; 字节拷贝
+;------------------------------------------------------------ 
+; 输入: 
+; 栈中三个参数(dst, src, size)
+mem_cpy:
+	cld														; 从低地址到高地址
+	push ebp
+	push edi
+	push esi
+	push ecx
+
+	mov ebp,esp												; EBP 指向栈顶，准备获取所传参数
+	mov edi,[ebp + 16]										; 获取 dst
+	mov esi,[ebp + 20]										; 获取 src
+	mov ecx,[ebp + 24]										; 获取 size
+	rep movsb												; 将 src 逐字节拷贝到 dst
+
+	pop ecx
+	pop esi
+	pop edi
+	pop ebp
+
+	ret
+
 
 ;------------------------------------------------------------ 
 ; 创建页目录以及页表
@@ -241,5 +326,85 @@ setup_page:
 		inc esi												; ESI 指向下一个页目录项
 		add eax,0x1000										; EAX 指向下一个物理页
 		loop .create_kernel_pde
+
+	ret
+
+;------------------------------------------------------------ 
+; 读取磁盘
+;------------------------------------------------------------ 
+; 输入: 
+; EAX = LBA 扇区号
+; EBX = 目标内存起始地址
+; ECX = 读入的扇区数（主要使用的是 CX）
+rd_disk_m_32:
+	mov esi,eax												; 备份 EAX
+	mov di,cx												; 备份 CX
+
+	;读写硬盘: 
+    
+    ;第 1 步: 设置要读取的扇区数 
+    mov dx,0x1f2            								; 端口 0x1f2（扇区数寄存器）
+    mov al,cl               								; 读取的扇区数
+    out dx,al               								; 将 al (1) 写入到端口 dx (0x1f2)
+
+    mov eax,esi             								; 恢复 eax 为扇区 lba 地址
+
+    ;第 2 步: 将 LBA 地址存入 0x1f3 ～ 0x1f6 
+    
+    ; LBA 7～0 位写入端口 0x1f3 
+    mov dx,0x1f3 
+    out dx,al               								; 将 al 写入到端口 dx (0x1f3)
+
+    ; LBA 15～8 位写入端口 0x1f4 
+    mov cl,8 
+    shr eax,cl              								; 右移 8 位
+    mov dx,0x1f4 
+    out dx,al               								; 将 al 写入到端口 dx (0x1f4)
+
+    ; LBA 23～16 位写入端口 0x1f5 
+    shr eax,cl              								; 右移 8 位
+    mov dx,0x1f5 
+    out dx,al               								; 将 al 写入到端口 dx (0x1f5)
+
+    ; LBA 27～24 位写入端口 0x1f6
+    shr eax,cl              								; 右移 8 位
+    and al,0x0f             								; device 寄存器的低 4 位表示 LBA 27～24 位 
+    or al,0xe0              								; 设置第 4 位为 0，表示 lba 主盘（1 为从盘）
+                            								; 设置第 5 位固定为 1，表示 MBS 位
+                            								; 设置第 6 位为 1，表示启动 LBA 模式（0 为 CHS 模式）
+                            								; 设置第 7 位固定为 1，表示 MBS 位
+    mov dx,0x1f6 
+    out dx,al
+
+    ; 第 3 步: 向 0x1f7 端口写入读命令
+    mov dx,0x1f7 
+    mov al,0x20             								; 0x20: 读扇区
+                            								; 0x30: 写扇区
+                            								; 0xEC: 硬盘识别
+    out dx,al
+
+	; 至此,硬盘控制器便从指定的 LBA 地址(EAX)处,读出连续的 CX 个扇区
+
+    ; 第 4 步: 检测硬盘状态 
+    .not_ready: 
+        nop 
+        in al,dx                							; 同一端口(0x1f7)，写时表示写入命令字，读时表示读入硬盘状态 
+        and al,0x88             							; 第 3 位为 1 表示硬盘控制器已准备好数据传输（数据就绪）
+                                							; 第 7 位为 1 表示硬盘忙 
+        cmp al,0x08             							; 是否数据就绪且不忙
+        jnz .not_ready          							; 若未准备好,继续等 
+
+        ; 第 5 步: 从 0x1f0 端口读数据 
+        mov ax,di               							; di 是 cx 参数的备份，表示要数据的扇区数量
+        mov dx,256              							; dx = 256，一个扇区有 512 字节,每次读入一个字，所以需要读取 256 次
+        mul dx                  							; eax = ax * dx
+        mov cx,ax               							; 设置最终需要读取的次数
+        mov dx,0x1f0            							; 设置读取数据的端口
+    
+    .go_on_read: 
+        in ax,dx                							; 从端口(0x1f0)读取 16 位数据到 ax
+        mov [ebx],ax             							; 将数据写入目标地址
+        add ebx,2											; 使用 EBX 代替 BX 指向缓冲区，以防止偏移地址溢出
+        loop .go_on_read
 
 	ret

@@ -1,6 +1,6 @@
 ; 主引导程序 
 ;-----------------------------------------------------------
-%include "include/boot.inc"
+%include "../include/boot.inc"
 SECTION MBR vstart=MBR_BASE_ADDR
     mov ax,cs               ; CS=0x0000（BIOS 跳转到 MBR 时，CS:IP=0x0000:0x7c00）
     mov ds,ax               ; DS=0x0000（数据段）
