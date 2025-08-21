@@ -205,6 +205,8 @@ p_mode_start:
 
 ;------------------------------------------------------------ 
 ; 进入内核，即运行 kernel.bin
+;
+; 注意！！！这里的指令在内存中位于 0x0d58
 ;------------------------------------------------------------ 
 enter_kernel:
 	mov byte [gs:320], 'k'									; 视频段段基址已经被更新（下同）
@@ -263,16 +265,16 @@ kernel_init:
 ; 输入: 
 ; 栈中三个参数(dst, src, size)
 mem_cpy:
-	cld														; 从低地址到高地址
 	push ebp
+	mov ebp,esp												; EBP 指向栈顶，准备获取所传参数
 	push edi
 	push esi
 	push ecx
 
-	mov ebp,esp												; EBP 指向栈顶，准备获取所传参数
-	mov edi,[ebp + 16]										; 获取 dst
-	mov esi,[ebp + 20]										; 获取 src
-	mov ecx,[ebp + 24]										; 获取 size
+	mov edi,[ebp + 8]										; 获取 dst
+	mov esi,[ebp + 12]										; 获取 src
+	mov ecx,[ebp + 16]										; 获取 size
+	cld														; 从低地址到高地址
 	rep movsb												; 将 src 逐字节拷贝到 dst
 
 	pop ecx

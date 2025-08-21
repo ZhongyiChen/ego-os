@@ -21,10 +21,10 @@ LOADER_STACK_TOP        equ LOADER_BASE_ADDR
 ; LOADER 在磁盘中的起始扇区号（与 dd 命令的 seek 参数值一致）
 LOADER_START_SECTOR     equ 0x2
 
-; KERNEL 的内存访问入口
+; kernel.bin 被载入放置的起始内存地址
 KERNEL_BIN_BASE_ADDR    equ 0x70000
 
-; KERNEL 在磁盘中的起始扇区号（与 dd 命令的 seek 参数值一致）
+; kernel.bin 在磁盘中的起始扇区号（与 dd 命令的 seek 参数值一致）
 KERNEL_START_SECTOR     equ 0x9
 
 ; KERNEL 程序的(虚拟)内存访问入口
@@ -55,7 +55,7 @@ DESC_LIMIT_VIDEO2       equ      0000_00000000_00000000b
 ; 高 32 位的第 15 位：P 位，表示段存在内存中
 DESC_P                  equ          1_0000000_00000000b
 
-; 高 32 位的第 13 ~ 14 位：DPL 位，数字越小，特权级越大，这里表示最高特权级
+; 高 32 位的第 13 ~ 14 位：DPL 位，数字越小，描述符特权级越大，这里 0 表示最高特权级
 DESC_DPL_0              equ           00_00000_00000000b
 DESC_DPL_1              equ           01_00000_00000000b
 DESC_DPL_2              equ           10_00000_00000000b
@@ -100,9 +100,17 @@ DESC_VIDEO_HIGH4        equ (0x00 << 24) + DESC_G_4K + DESC_D_32 + \
 ; --------------------------------------------------
 
 ; 选择子的第 0 ～ 1 位：RPL 位，数字越小，所请求特权级越大，这里 0 表示最高特权级
+
+; 指令请求特权级 0（最高）
 RPL0                    equ   00b
+
+; 指令请求特权级 1
 RPL1                    equ   01b
+
+; 指令请求特权级 2
 RPL2                    equ   10b
+
+; 指令请求特权级 3（最低）
 RPL3                    equ   11b
 
 ; 选择子的第 2 位：TI 位，TI 为 0 表示 GDT 索引描述符
@@ -121,8 +129,8 @@ PAGE_DIR_TABLE_POS      equ 0x100000
 PG_P                    equ     1b
 PG_RW_R                 equ   0_0b
 PG_RW_W                 equ   1_0b
-PG_US_S                 equ 0_0_0b
-PG_US_U                 equ 1_0_0b
+PG_US_S                 equ  0_00b
+PG_US_U                 equ  1_00b
 
 
 ; --------------------------------------------------

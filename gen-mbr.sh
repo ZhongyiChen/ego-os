@@ -1,5 +1,9 @@
 #!/bin/bash
 
+if [ ! -d "dist" ]; then
+    mkdir dist
+fi
+
 if [ ! -e "./dist/hd60M.img" ]; then
     dd if=/dev/zero of=./dist/hd60M.img bs=1M count=60
 fi

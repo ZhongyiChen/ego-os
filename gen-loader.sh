@@ -1,5 +1,9 @@
 #!/bin/bash
 
+if [ ! -d "dist" ]; then
+    mkdir dist
+fi
+
 ./gen-mbr.sh
 
 # 生成 loader.bin
