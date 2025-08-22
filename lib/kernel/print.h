@@ -4,5 +4,6 @@
 #include "stdint.h"
 
 void put_char(uint8_t char_ascii);
+void put_str(uint8_t* message);
 
 #endif

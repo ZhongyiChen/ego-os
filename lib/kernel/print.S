@@ -9,8 +9,37 @@ SELECTOR_VIDEO 		    equ (0x0003<<3) + TI_GDT + RPL0
 
 
 [bits 32]
-
 section .text
+
+global put_str
+put_str:
+	push ebx
+	push ecx
+
+	mov ebx,[esp + 12]										; 获取参数字符串地址
+
+	.go_on:
+		xor ecx,ecx											; 清零，准备使用 CL 作为字符载体
+		mov cl,[ebx]
+		cmp cl,0											; 0x0 字符表示字符串结尾
+		jz .str_end
+		push ecx											; 为 put_char 函数提供参数
+		call put_char
+		pop ecx												; 目的是为了实现 `add esp,4`
+		inc ebx												; EBX 指向下一个字符
+		jmp .go_on
+
+	.str_end:
+
+	pop ecx
+	pop ebx
+	ret
+
+;------------------------------------------------------------ 
+; 字节拷贝
+;------------------------------------------------------------ 
+; 输入: 
+; 栈中一个参数(char)
 global put_char
 put_char:
 	pushad										            ; 依次压入 `EAX`、`ECX`、`EDX`、`EBX`、`ESP`、`EBP`、`ESI`、`EDI`。仅 32 位模式可用
