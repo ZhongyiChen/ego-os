@@ -11,6 +11,104 @@ SELECTOR_VIDEO 		    equ (0x0003<<3) + TI_GDT + RPL0
 [bits 32]
 section .text
 
+;------------------------------------------------------------ 
+; 打印一个无符号整数到屏幕
+;
+; 注意！！！这里的指令在内存中位于 0x16b0
+;------------------------------------------------------------ 
+; 输入: 
+; 栈中一个 32 位无符号整数(num)
+global put_int
+put_int:
+	push esi
+
+	mov esi,[esp + 8]										; 获取参数整数
+	
+	.exchange_and_print:
+		push esi
+		call bin_to_bcd										; 返回 EDX:EAX
+		pop esi
+
+		cmp edx,0
+		jz .print_low_part									; 如果高位全是 0，则跳过
+
+	.print_high_part:
+		push edx
+		call put_bcd										; 打印高 16 位 BCD
+		pop edx
+		
+	.print_low_part:
+		push eax
+		call put_bcd										; 打印低 16 位 BCD
+		pop eax
+
+	pop esi
+	ret
+
+
+;------------------------------------------------------------ 
+; 打印一个 BCD 整数到屏幕
+;------------------------------------------------------------ 
+; 输入: 
+; 栈中一个 8 位 BCD (32 bits)
+global put_bcd
+put_bcd:
+	push eax
+	push ecx
+	push ebx
+	push esi
+	push edi
+
+	mov esi,[esp + 24]									; 获取参数
+	mov edi,0x03										; 表示至少打印一个 BCD 字符(4 bits)，这里指向第 3 个字符
+
+	bsr ebx,esi
+	cmovz ebx,edi										; 数值 0 则只打印单个 0 即可
+	inc ebx												; 由于序号从 0 开始，因此这里补偿 1
+
+	mov eax,ebx
+	and eax,0x03
+	jz .is_fours										; 如果 EAX 此时为 0，说明 EBX 是 4 的倍数
+
+	xor ebx,eax											; 非 4 的倍数，则向上调整为 4 的倍数
+	add ebx,0x04
+
+	.is_fours:
+		mov ecx,32
+		sub ecx,ebx											; ECX (CL)此时等于 ESI 需要提前左移的位数
+		shl esi,cl
+
+		mov ecx,ebx
+		shr ecx,2											; EBX / 4 = 需要循环的次数
+
+		cmp ecx,0
+		jnz .extract_bcd
+		mov ecx,1											; ECX 不能为 0，至少要大于等于 1
+
+	.extract_bcd:
+		xor eax,eax
+		shld eax,esi,4
+		shl esi,4
+		add eax,'0'
+		push eax
+		call put_char
+		pop eax
+		loop .extract_bcd
+
+	.put_bcd_end:
+
+	pop edi
+	pop esi
+	pop ebx
+	pop ecx
+	pop eax
+	ret
+
+;------------------------------------------------------------ 
+; 打印一个字符串到屏幕
+;------------------------------------------------------------ 
+; 输入: 
+; 栈中一个参数(str)
 global put_str
 put_str:
 	push ebx
@@ -36,7 +134,7 @@ put_str:
 	ret
 
 ;------------------------------------------------------------ 
-; 字节拷贝
+; 打印一个字符到屏幕
 ;------------------------------------------------------------ 
 ; 输入: 
 ; 栈中一个参数(char)
@@ -143,3 +241,103 @@ put_char:
 
     popad                                                   ; 对应 PUSHAD 指令。它们结对出现
     ret
+
+;------------------------------------------------------------ 
+; 32 位 binary 无符号整数转换成 BCD
+;
+; 注意！！！这里的指令在内存中位于 0x17fa
+;------------------------------------------------------------ 
+; 输入: 
+; 栈中一个 32 位无符号整数
+;
+; 输出: 
+; EDX:EAX
+bin_to_bcd:
+	push ecx
+	push ebx
+	push esi
+
+	xor edx,edx												; 清零
+	xor eax,eax
+	mov esi,[esp + 16]
+	bsr ebx,esi												; 找到最高位的 1 在寄存器的下标，作为循环次数 (先暂存于 EBX，其实只占用到了 BL)
+	jz .exchange_end
+	mov ecx,31
+	sub ecx,ebx												; CL = (32 - 1) - BL
+	sal esi,cl
+	mov ecx,ebx												; 把循环次数赋值给 ECX，准备开始循环
+	inc ecx													; 由于 EBX 存储的是最高位 1 的下标，因此这里加 1 以修正循环次数
+
+	.exchanging_bcd:										; EDX:EAX:ESI 作为一个整体将执行多次左移操作
+		push esi
+		call reach_5_add_3
+		pop esi
+		sal esi,1											; ESI 的最高位进入 CF
+		rcl eax,1											; EAX:CF 作为一个整体执行左移操作
+		rcl edx,1											; EDX:CF 作为一个整体执行左移操作
+															; 这里也可以使用 `shld edx,eax,1` +  `shld eax,esi,1` + `shl esi,1` 实现同样的功能逻辑
+		loop .exchanging_bcd
+
+	.exchange_end:
+
+	pop esi
+	pop ecx
+	pop ebx
+	ret
+
+;------------------------------------------------------------ 
+; 对 EDX:EAX 每 4 位执行满 5 加 3
+;
+; 注意！！！这里的指令在内存中位于 0x1826
+;------------------------------------------------------------ 
+; 输入: 
+; EDX - 高 32 位
+; EAX - 高 32 位
+;
+; 输出: 
+; EDX - 高 32 位
+; EAX - 高 32 位
+reach_5_add_3:
+	push ebx
+	push ebp
+	push esi
+	push edi
+
+	mov ebp,0x0000000F
+	
+	.compare_and_add:
+		mov esi,eax
+		and esi,ebp												; 取出原始值(某 4 位)放入 ESI 与 EDI
+		mov edi,esi
+		mov ebx,0x33333333
+		and ebx,ebp
+		add edi,ebx												; EDI (某 4 位) = ESI(某 4 位) + 3
+		mov ebx,0x55555555
+		and ebx,ebp
+		cmp esi,ebx												; ESI (某 4 位)与 5 进行比较
+		cmovb edi,esi											; 如果 ESI (某 4 位) < 5，则 EDI = ESI；否则 EDI = EDI
+		xor eax,esi												; EAX 的对应当前 4 位清 0
+		or eax,edi												; EAX 加上已处理好某 4 位
+		
+		mov esi,edx
+		and esi,ebp												; 取出原始值(某 4 位)放入 ESI 与 EDI
+		mov edi,esi
+		mov ebx,0x33333333
+		and ebx,ebp
+		add edi,ebx												; EDI (某 4 位) = ESI(某 4 位) + 3
+		mov ebx,0x55555555
+		and ebx,ebp
+		cmp esi,ebx												; ESI (某 4 位)与 5 进行比较
+		cmovb edi,esi											; 如果 ESI (某 4 位) < 5，则 EDI = ESI；否则 EDI = EDI
+		xor edx,esi												; EDX 的对应当前 4 位清 0
+		or edx,edi												; EDX 加上已处理好某 4 位
+
+		shl ebp,4
+		cmp ebp,0
+		jnz .compare_and_add
+
+	pop edi
+	pop esi
+	pop ebp
+	pop ebx
+	ret
