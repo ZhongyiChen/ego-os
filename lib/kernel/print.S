@@ -47,11 +47,13 @@ put_int:
 
 
 ;------------------------------------------------------------ 
-; 打印一个 BCD 整数到屏幕
+; 打印一个 BCD/HEX 整数到屏幕
 ;------------------------------------------------------------ 
 ; 输入: 
-; 栈中一个 8 位 BCD (32 bits)
+; 栈中一个 8 位 BCD/HEX (32 bits)
+global put_hex
 global put_bcd
+put_hex:
 put_bcd:
 	push eax
 	push ecx
@@ -60,7 +62,7 @@ put_bcd:
 	push edi
 
 	mov esi,[esp + 24]									; 获取参数
-	mov edi,0x03										; 表示至少打印一个 BCD 字符(4 bits)，这里指向第 3 个字符
+	mov edi,0x03										; 表示至少打印一个 BCD/HEX 字符(4 bits)，这里指向第 3 个字符
 
 	bsr ebx,esi
 	cmovz ebx,edi										; 数值 0 则只打印单个 0 即可
@@ -81,6 +83,9 @@ put_bcd:
 		mov ecx,ebx
 		shr ecx,2											; EBX / 4 = 需要循环的次数
 
+		mov ebx,'A'
+		sub ebx,10											; EBX = 'A' - 10，为接下来的数字转字符做准备
+
 		cmp ecx,0
 		jnz .extract_bcd
 		mov ecx,1											; ECX 不能为 0，至少要大于等于 1
@@ -89,7 +94,10 @@ put_bcd:
 		xor eax,eax
 		shld eax,esi,4
 		shl esi,4
-		add eax,'0'
+		mov edi,'0'
+		cmp eax,9
+		cmova edi,ebx										; 如果 EAX > 9，EDI = 'A' - 10；否则，EDI = '0'
+		add eax,edi											; EAX + EDI = '0' ~ 'F'
 		push eax
 		call put_char
 		pop eax
