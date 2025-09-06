@@ -25,6 +25,9 @@ struct GateDesc {
 static void make_idt_desc(struct GateDesc* p_gdesc, uint8_t attr, intr_handler fn);
 static struct GateDesc idt[IDT_DESC_N];		// idt 是中断描述符表，本质上就是个中断门描述符数组
 
+char* intr_name[IDT_DESC_N];				// 用于保存异常的名字
+intr_handler idt_table[IDT_DESC_N];			// 中断处理程序数组，用于保存所有中断处理程序的句柄
+
 extern intr_handler intr_entry_table[IDT_DESC_N];						// 声明引用定义在 kernel.S 中的中断处理函数入口数组
 
 /**
@@ -72,12 +75,57 @@ static void init_idt_desc(void) {
 }
 
 /**
+ * 中断处理的默认函数
+ */
+static void default_intr_handler(uint8_t vec_nr) {
+	if (vec_nr == 0x27 || vec_nr == 0x2f) {
+		// IRQ7 和 IRQ15 会产生伪中断(Spurious Interrupt)，无须处理
+		// 0x2f 是从片 8259A 上的最后一个 irq 引脚，保留
+		return;
+	}
+	put_str("int verctor: 0x");
+	put_hex(vec_nr);
+	put_char('\n');
+}
+
+/**
+ * 注册一般中断处理函数以及异常名称
+ */
+static void init_exception(void) {
+	for (int i = 0; i < IDT_DESC_N; i++) {
+		idt_table[i] = default_intr_handler;		// 默认采用 中断处理一般函数
+		intr_name[i] = "unknown";
+	}
+   intr_name[0] = "#DE Divide Error";
+   intr_name[1] = "#DB Debug Exception";
+   intr_name[2] = "NMI Interrupt";
+   intr_name[3] = "#BP Breakpoint Exception";
+   intr_name[4] = "#OF Overflow Exception";
+   intr_name[5] = "#BR BOUND Range Exceeded Exception";
+   intr_name[6] = "#UD Invalid Opcode Exception";
+   intr_name[7] = "#NM Device Not Available Exception";
+   intr_name[8] = "#DF Double Fault Exception";
+   intr_name[9] = "Coprocessor Segment Overrun";
+   intr_name[10] = "#TS Invalid TSS Exception";
+   intr_name[11] = "#NP Segment Not Present";
+   intr_name[12] = "#SS Stack Fault Exception";
+   intr_name[13] = "#GP General Protection Exception";
+   intr_name[14] = "#PF Page-Fault Exception";
+   // intr_name[15] 第 15 项是 intel 保留项，未使用
+   intr_name[16] = "#MF x87 FPU Floating-Point Error";
+   intr_name[17] = "#AC Alignment Check Exception";
+   intr_name[18] = "#MC Machine-Check Exception";
+   intr_name[19] = "#XF SIMD Floating-Point Exception";
+}
+
+/**
  * 初始化全部有关中断的工作
  */
 void init_idt() {
 	put_str("init_idt start\n");
 	
 	init_idt_desc();						// 初始化中断描述符表
+	init_exception();						// 异常名初始化并注册通用中断处理函数
 	init_pic();								// 初始化可编程中断控制器(8259A)
 
 	uint64_t idt_operand = (sizeof(idt) - 1) | ((uint64_t)(uint32_t)idt << 16);			// 低 16 位是 IDT 的界限（即表的大小减 1），高 32 位是 IDT 的基地址
