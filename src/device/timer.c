@@ -1,7 +1,7 @@
 #include "timer.h"
-#include "stdint.h"
 #include "io.h"
 #include "print.h"
+#include "stdint.h"
 
 #define IRQ0_FREQUENCY				100			// 8253 被期盼的中断频率
 #define INPUT_FREQUENCY				1193180		// 8253 计算器的工作频率约为 1.19318MHz

@@ -1,5 +1,7 @@
 #include "print.h"
 #include "init.h"
+#include "debug.h"
+#include "stdint.h"
 
 void main(void) {
     put_char('\n');
@@ -27,6 +29,7 @@ void main(void) {
     put_str("Hello World!\n");
     init_all();
 
-    asm volatile("sti");                                    // 临时打开中断 Flag，以演示中断处理
+    // asm volatile("sti");                                    // 临时打开中断 Flag，以演示中断处理
+    ASSERT(1 == 2);
     while(1);
 }
