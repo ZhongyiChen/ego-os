@@ -23,7 +23,10 @@ O_FILES := $(OBJ_DIR)/main.o \
 	$(OBJ_DIR)/timer.o \
 	$(OBJ_DIR)/kernel.o \
 	$(OBJ_DIR)/print.o \
-	$(OBJ_DIR)/debug.o
+	$(OBJ_DIR)/debug.o \
+	$(OBJ_DIR)/memory.o \
+	$(OBJ_DIR)/bitmap.o \
+	$(OBJ_DIR)/string.o
 
 
 $(DIST_DIR)/mbr.bin: $(SRC_DIR)/boot/mbr.S
@@ -68,6 +71,30 @@ $(OBJ_DIR)/debug.o: $(SRC_DIR)/kernel/debug.c \
 		$(SRC_DIR)/kernel/debug.h \
 		$(SRC_DIR)/lib/kernel/print.h \
 		$(SRC_DIR)/kernel/interrupt.h \
+        $(SRC_DIR)/lib/stdint.h
+	$(CC) $(CFLAGS) $< -o $@
+
+$(OBJ_DIR)/string.o: $(SRC_DIR)/lib/string.c \
+		$(SRC_DIR)/lib/string.h \
+		$(SRC_DIR)/lib/kernel/global.h \
+		$(SRC_DIR)/kernel/debug.h \
+        $(SRC_DIR)/lib/stdint.h
+	$(CC) $(CFLAGS) $< -o $@
+
+$(OBJ_DIR)/bitmap.o: $(SRC_DIR)/lib/kernel/bitmap.c \
+		$(SRC_DIR)/lib/kernel/bitmap.h \
+		$(SRC_DIR)/lib/kernel/global.h \
+		$(SRC_DIR)/lib/string.h \
+		$(SRC_DIR)/lib/kernel/print.h \
+		$(SRC_DIR)/kernel/interrupt.h \
+		$(SRC_DIR)/kernel/debug.h \
+        $(SRC_DIR)/lib/stdint.h
+	$(CC) $(CFLAGS) $< -o $@
+
+$(OBJ_DIR)/memory.o: $(SRC_DIR)/kernel/memory.c \
+		$(SRC_DIR)/kernel/memory.h \
+		$(SRC_DIR)/lib/kernel/bitmap.h \
+		$(SRC_DIR)/lib/kernel/print.h \
         $(SRC_DIR)/lib/stdint.h
 	$(CC) $(CFLAGS) $< -o $@
 

@@ -30,6 +30,6 @@ void main(void) {
     init_all();
 
     // asm volatile("sti");                                    // 临时打开中断 Flag，以演示中断处理
-    ASSERT(1 == 2);
+    // ASSERT(1 == 2);
     while(1);
 }
