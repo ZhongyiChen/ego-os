@@ -1,6 +1,7 @@
 #include "print.h"
 #include "init.h"
 #include "debug.h"
+#include "memory.h"
 #include "stdint.h"
 
 void main(void) {
@@ -31,5 +32,11 @@ void main(void) {
 
     // asm volatile("sti");                                    // 临时打开中断 Flag，以演示中断处理
     // ASSERT(1 == 2);
+
+    void* addr = get_kernel_pages(3);
+    put_str("\nget_kernel_pages start vaddr is: ");
+    put_hex((uint32_t)addr);
+    put_str("\n");
+
     while(1);
 }

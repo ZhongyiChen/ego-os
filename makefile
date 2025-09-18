@@ -10,9 +10,9 @@ ENTRY_POINT := 0xc0001500
 
 AS_LIB := -I $(SRC_DIR)/include/
 C_LIB := -I $(SRC_DIR)/lib/ -I $(SRC_DIR)/lib/kernel/ -I $(SRC_DIR)/kernel/ -I $(SRC_DIR)/device/
-ASFLAGS := -f elf
-CFLAGS := -m32 -ffreestanding -nostdlib -fno-builtin -Wstrict-prototypes -Wmissing-prototypes $(C_LIB) -c
-LDFLAGS := -melf_i386 -Ttext $(ENTRY_POINT) -e main
+AS_FLAGS := -f elf
+C_FLAGS := -m32 -ffreestanding -nostdlib -fno-builtin -Wstrict-prototypes -Wmissing-prototypes $(C_LIB) -c
+LD_FLAGS := -melf_i386 -Ttext $(ENTRY_POINT) -e main
 
 IMG_FILE := hd60M.img
 # C_FILES := $(SRC_DIR)/**/*.c
@@ -41,8 +41,9 @@ $(OBJ_DIR)/main.o: $(SRC_DIR)/kernel/main.c \
 		$(SRC_DIR)/lib/kernel/print.h \
 		$(SRC_DIR)/kernel/init.h \
 		$(SRC_DIR)/kernel/debug.h \
+		$(SRC_DIR)/kernel/memory.h \
         $(SRC_DIR)/lib/stdint.h
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(C_FLAGS) $< -o $@
 
 $(OBJ_DIR)/init.o: $(SRC_DIR)/kernel/init.c \
 		$(SRC_DIR)/kernel/init.h \
@@ -50,7 +51,7 @@ $(OBJ_DIR)/init.o: $(SRC_DIR)/kernel/init.c \
 		$(SRC_DIR)/kernel/interrupt.h \
         $(SRC_DIR)/device/timer.h \
         $(SRC_DIR)/lib/stdint.h
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(C_FLAGS) $< -o $@
 
 $(OBJ_DIR)/interrupt.o: $(SRC_DIR)/kernel/interrupt.c \
 		$(SRC_DIR)/kernel/interrupt.h \
@@ -58,28 +59,28 @@ $(OBJ_DIR)/interrupt.o: $(SRC_DIR)/kernel/interrupt.c \
 		$(SRC_DIR)/lib/kernel/io.h \
 		$(SRC_DIR)/lib/kernel/print.h \
         $(SRC_DIR)/lib/stdint.h
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(C_FLAGS) $< -o $@
 
 $(OBJ_DIR)/timer.o: $(SRC_DIR)/device/timer.c \
 		$(SRC_DIR)/device/timer.h \
 		$(SRC_DIR)/lib/kernel/io.h \
 		$(SRC_DIR)/lib/kernel/print.h \
         $(SRC_DIR)/lib/stdint.h
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(C_FLAGS) $< -o $@
 
 $(OBJ_DIR)/debug.o: $(SRC_DIR)/kernel/debug.c \
 		$(SRC_DIR)/kernel/debug.h \
 		$(SRC_DIR)/lib/kernel/print.h \
 		$(SRC_DIR)/kernel/interrupt.h \
         $(SRC_DIR)/lib/stdint.h
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(C_FLAGS) $< -o $@
 
 $(OBJ_DIR)/string.o: $(SRC_DIR)/lib/string.c \
 		$(SRC_DIR)/lib/string.h \
 		$(SRC_DIR)/lib/kernel/global.h \
 		$(SRC_DIR)/kernel/debug.h \
         $(SRC_DIR)/lib/stdint.h
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(C_FLAGS) $< -o $@
 
 $(OBJ_DIR)/bitmap.o: $(SRC_DIR)/lib/kernel/bitmap.c \
 		$(SRC_DIR)/lib/kernel/bitmap.h \
@@ -89,24 +90,24 @@ $(OBJ_DIR)/bitmap.o: $(SRC_DIR)/lib/kernel/bitmap.c \
 		$(SRC_DIR)/kernel/interrupt.h \
 		$(SRC_DIR)/kernel/debug.h \
         $(SRC_DIR)/lib/stdint.h
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(C_FLAGS) $< -o $@
 
 $(OBJ_DIR)/memory.o: $(SRC_DIR)/kernel/memory.c \
 		$(SRC_DIR)/kernel/memory.h \
 		$(SRC_DIR)/lib/kernel/bitmap.h \
 		$(SRC_DIR)/lib/kernel/print.h \
         $(SRC_DIR)/lib/stdint.h
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(C_FLAGS) $< -o $@
 
 $(OBJ_DIR)/kernel.o: $(SRC_DIR)/kernel/kernel.S
-	$(AS) $(ASFLAGS) $< -o $@
+	$(AS) $(AS_FLAGS) $< -o $@
 
 $(OBJ_DIR)/print.o: $(SRC_DIR)/lib/kernel/print.S
-	$(AS) $(ASFLAGS) $< -o $@
+	$(AS) $(AS_FLAGS) $< -o $@
 
 
 $(DIST_DIR)/kernel.bin: $(O_FILES)
-	$(LD) $(LDFLAGS) $^ -o $@
+	$(LD) $(LD_FLAGS) $^ -o $@
 
 
 # 声明 clean 等为伪目标名，作用是确保该目标下的命令永远被执行，而不考虑是否产生真实的目标文件
