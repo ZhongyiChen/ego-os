@@ -9,7 +9,7 @@ LD := ld
 ENTRY_POINT := 0xc0001500
 
 AS_LIB := -I $(SRC_DIR)/include/
-C_LIB := -I $(SRC_DIR)/lib/ -I $(SRC_DIR)/lib/kernel/ -I $(SRC_DIR)/kernel/ -I $(SRC_DIR)/device/
+C_LIB := -I $(SRC_DIR)/lib/ -I $(SRC_DIR)/lib/kernel/ -I $(SRC_DIR)/kernel/ -I $(SRC_DIR)/device/ -I $(SRC_DIR)/thread/
 AS_FLAGS := -f elf
 C_FLAGS := -m32 -ffreestanding -nostdlib -fno-builtin -Wstrict-prototypes -Wmissing-prototypes $(C_LIB) -c
 LD_FLAGS := -melf_i386 -Ttext $(ENTRY_POINT) -e main
@@ -26,7 +26,8 @@ O_FILES := $(OBJ_DIR)/main.o \
 	$(OBJ_DIR)/debug.o \
 	$(OBJ_DIR)/memory.o \
 	$(OBJ_DIR)/bitmap.o \
-	$(OBJ_DIR)/string.o
+	$(OBJ_DIR)/string.o \
+	$(OBJ_DIR)/thread.o
 
 
 $(DIST_DIR)/mbr.bin: $(SRC_DIR)/boot/mbr.S
@@ -42,6 +43,7 @@ $(OBJ_DIR)/main.o: $(SRC_DIR)/kernel/main.c \
 		$(SRC_DIR)/kernel/init.h \
 		$(SRC_DIR)/kernel/debug.h \
 		$(SRC_DIR)/kernel/memory.h \
+		$(SRC_DIR)/thread/thread.h \
         $(SRC_DIR)/lib/stdint.h
 	$(CC) $(C_FLAGS) $< -o $@
 
@@ -79,6 +81,14 @@ $(OBJ_DIR)/string.o: $(SRC_DIR)/lib/string.c \
 		$(SRC_DIR)/lib/string.h \
 		$(SRC_DIR)/lib/kernel/global.h \
 		$(SRC_DIR)/kernel/debug.h \
+        $(SRC_DIR)/lib/stdint.h
+	$(CC) $(C_FLAGS) $< -o $@
+
+$(OBJ_DIR)/thread.o: $(SRC_DIR)/thread/thread.c \
+		$(SRC_DIR)/thread/thread.h \
+		$(SRC_DIR)/lib/string.h \
+		$(SRC_DIR)/lib/kernel/global.h \
+		$(SRC_DIR)/kernel/memory.h \
         $(SRC_DIR)/lib/stdint.h
 	$(CC) $(C_FLAGS) $< -o $@
 
